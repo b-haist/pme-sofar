@@ -224,7 +224,7 @@ void loop(void) {
                   uptimeGetMs(), rtcTimeBuffer, read_len, payload_buffer);
     }
 
-    /* Don't bombard at this stage
+    /* Don't bombard the spotter at this stage
     if(spotter_tx_data(payload_buffer, read_len, BM_NETWORK_TYPE_CELLULAR_IRI_FALLBACK)){
       printf("%llut - %s | Successfully sent Spotter transmit data request\n", uptimeGetMs(), rtcTimeBuffer);
     }

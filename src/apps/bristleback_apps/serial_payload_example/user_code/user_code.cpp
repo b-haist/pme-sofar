@@ -18,6 +18,13 @@
 #define DEFAULT_LINE_TERM 10 // newline, '\n', 0x0A
 #define BYTES_CLUSTER_MS 50  // used for console printing convenience
 #define DEFAULT_UART_MODE MODE_RS232
+// How often, in minutes, we want to compute stats.
+#define DEFAULT_SENSOR_AGG_PERIOD_MIN (0.5) // let's start with 30s for quick testing
+// Converted to milliseconds.
+#define SENSOR_AGG_PERIOD_MS ((double)DEFAULT_SENSOR_AGG_PERIOD_MIN * 60.0 * 1000.0)
+// How long should our sample buffer arrays be?
+// Assume we have a 2s polling period.
+#define MAX_SENSOR_SAMPLES (((uint64_t)SENSOR_AGG_PERIOD_MS / 10000))
 
 // app_main passes a handle to the config partitions in NVM.
 extern cfg::Configuration *userConfigurationPartition;
@@ -27,12 +34,17 @@ extern cfg::Configuration *systemConfigurationPartition;
 static u_int32_t baud_rate_config = DEFAULT_BAUD_RATE;
 static u_int32_t line_term_config = DEFAULT_LINE_TERM;
 static u_int32_t bm_log_enable = false;
+// Structures to store readings for our on-board sensors.
+static AveragingSampler do_stats;
+static AveragingSampler temp_stats;
+static AveragingSampler q_stats;
+// A timer variable we can set to trigger a pulse on LED2 when we get payload serial data
+static int32_t ledLinePulse = -1;
 
 // A buffer to put Rx data from our payload sensor into.
 char payload_buffer[2048];
 
-// A timer variable we can set to trigger a pulse on LED2 when we get payload serial data
-static int32_t ledLinePulse = -1;
+
 
 void setup(void) {
   /* USER ONE-TIME SETUP CODE GOES HERE */
@@ -40,6 +52,10 @@ void setup(void) {
   userConfigurationPartition->getConfig("plUartBaudRate", strlen("plUartBaudRate"), baud_rate_config);
   userConfigurationPartition->getConfig("plUartLineTerm", strlen("plUartLineTerm"), line_term_config);
   systemConfigurationPartition->getConfig("sensorBmLogEnable", strlen("sensorBmLogEnable"), bm_log_enable);
+  // initBuffer will allocate memory for stats data buffers.
+  temp_stats.initBuffer(MAX_SENSOR_SAMPLES);
+  doxygen_stats.initBuffer(MAX_SENSOR_SAMPLES);
+  q_stats.initBuffer(MAX_SENSOR_SAMPLES);
 
   // Setup the UART – the on-board serial driver that talks to the RS232 transceiver.
   PLUART::init(USER_TASK_PRIORITY);
@@ -74,6 +90,19 @@ void loop(void) {
   // Read a cluster of Rx bytes if available
   // -- A timer is used to try to keep clusters of bytes (say from lines) in the same output.
   static int64_t readingBytesTimer = -1;
+  /* Poll the humidity & temperature sensor and add samples if available */
+  float doxygen, temp, q = 0.0;
+  if (htuSamplerGetLatest(doxygen, temp, q)) {
+    doxygen_stats.addSample(doxygen);
+    temp_stats.addSample(temp);
+    q_stats.addSample(q);
+    
+    printf("DO, Temp, Q stats | count: %u/%lu, min_DO: %f, max_DO: %f, min_T: %f, max_T: %f, min_Q: %f, max_Q: %f\n",
+            doxygen_stats.getNumSamples(), MAX_SENSOR_SAMPLES, 
+            doxygen_stats.getMin(), doxygen_stats.getMax(), 
+            temp_stats.getMin(), temp_stats.getMax(),
+            q_stats.getMax(), q_stats.getMin());
+  }
   // Note - PLUART::setUseByteStreamBuffer must be set true in setup to enable bytes.
   if (readingBytesTimer == -1 && PLUART::byteAvailable()) {
     // Get the RTC if available

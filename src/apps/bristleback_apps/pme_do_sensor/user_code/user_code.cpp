@@ -69,7 +69,6 @@ void setup(void) {
   // Retrieve user-set config values out of NVM.
   hardwareConfigurationPartition->getConfig("plUartBaudRate", strlen("plUartBaudRate"), lastWipeTime);
   userConfigurationPartition->getConfig("plUartLineTerm", strlen("plUartLineTerm"), line_term_config);
-  systemConfigurationPartition->getConfig("sensorBmLogEnable", strlen("sensorBmLogEnable"), bm_log_enable);
   
   //Perform pme sensor setup which includes PLUART setup (P.F.)
   pme_sensor.init();
@@ -91,7 +90,8 @@ void setup(void) {
     size_t encoded_len = 0;
     if (PmeDissolvedOxygenMsg::encode(d, cbor_buf, sizeof(cbor_buf), &encoded_len) == CborNoError) {
       bm_pub_wl(pme_do_topic, pme_do_topic_str_len, cbor_buf, encoded_len, 0);
-    } else {
+    } 
+    else {
       printf("Failed to encode DO measurement data message\n");
     }
   }

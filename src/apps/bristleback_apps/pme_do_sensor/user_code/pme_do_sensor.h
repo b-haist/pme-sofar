@@ -18,13 +18,13 @@ class PmeSensor {
     static constexpr char PME_WIPE_RAW_LOG[] = "pme_wipe_raw.log";
 
   private:
-    static constexpr uint32_t BAUD_RATE = 9600;
+    static constexpr u_int32_t BAUD_RATE = 9600;
     static constexpr char LINE_TERM = '\r';
     static constexpr ValueType PARSER_VALUE_TYPE[] = {TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE};
     static constexpr char SENSOR_BM_LOG_ENABLE[] = "sensorBmLogEnable";
 
   private:
-    uint32_t _sensorBmLogEnable = 0;
+    u_int32_t _sensorBmLogEnable = 0;
     OrderedSeparatorLineParser _parser;
     char _payload_buffer[2048];
 };

@@ -143,22 +143,22 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &d) {
     printf("DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s\n", uptimeGetMs(),
            rtc_time_str, read_len, _payload_buffer);
 
+    // Expect readout in format +90 (wipe_current_mean_mA), +5 (wipe_duration_s)
     if (_parser.parseLine(_payload_buffer, read_len)) {
-      Value temp_signal = _parser.getValue(2);
-      Value do_signal = _parser.getValue(3);
-      Value q_signal = _parser.getValue(4);
-      if ( temp_signal.type != TYPE_DOUBLE || do_signal.type != TYPE_DOUBLE || q_signal.type != TYPE_DOUBLE) {
-        printf("Parsed invalid DOT data: temp_signal: %d, do_signal: %d, q_signal: %d\n", temp_signal.type, do_signal.type, q_signal.type);
-      } else {
+      Value wipe_current_mean_mA = _parser.getValue(0);
+      Value wipe_duration = _parser.getValue(1);
+      if (wipe_current_mean_mA.type != TYPE_DOUBLE || wipe_duration.type != TYPE_DOUBLE) { 
+        printf("Parsed invalid DOT data: wipe_current_mean_mA: %d, wipe_duration (sec): %d\n", wipe_current_mean_mA.type, wipe_duration.type);
+        } 
+      else {
         d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
         d.header.reading_uptime_millis = uptimeGetMs();
-        d.temperature_deg_c = temp_signal.data.double_val;
-        d.do_mg_per_l = do_signal.data.double_val;
-        d.quality = q_signal.data.double_val;
-        d.do_saturation_pct = NULL;
+        d.wipe_current_mean_ma = wipe_current_mean_mA.data.double_val;
+        d.wipe_duration_s = wipe_duration.data.double_val;
         success = true;
-      }
-    } else {
+        }
+    } 
+    else {
       printf("Failed to parse DOT data\n");
     }
   }

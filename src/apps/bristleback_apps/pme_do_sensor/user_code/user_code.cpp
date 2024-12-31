@@ -25,6 +25,8 @@
 #include "OrderedSeparatorLineParser.h"
 #include "device_info.h"
 #include "io.h"
+#include <sys/types.h>
+#include "pme_dissolved_oxygen_msg.h"
 
 // app_main passes a handle to the config partitions in NVM.
 extern cfg::Configuration *userConfigurationPartition;
@@ -36,10 +38,10 @@ static PmeSensor pme_sensor;
 // changed from int to float to match member function in configuration.h (B.H)
 static float lastWipeTime = 0;
 //Line terminator for userConfigurationPartition (B.H.)
-static uint32_t line_term_config = 13; // Carraige Return, CR, 0x0D
+static u_int32_t line_term_config = 13; // Carraige Return, CR, 0x0D
 
 //Defines the max buffer size for the pme sensor message (P.F.)
-static constexpr uint32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;
+static constexpr u_int32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;
 
 //Defines variables used in topic generation (P.F.)
 static char pme_do_topic[BM_TOPIC_MAX_LEN]; //DO

@@ -32,7 +32,8 @@ extern cfg::Configuration *systemConfigurationPartition;
 extern cfg::Configuration *hardwareConfigurationPartition;
 
 //holds the unix eopch time of the last wipe (P.F.)
-static uint64_t lastWipeTime = 0;
+// changed from int to float to match member function in configuration.h (B.H)
+static float lastWipeTime = 0;
 
 //Defines the max buffer size for the pme sensor message (P.F.)
 static constexpr uint32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;

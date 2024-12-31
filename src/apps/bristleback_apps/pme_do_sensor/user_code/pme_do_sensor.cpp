@@ -40,7 +40,6 @@ void PmeSensor::init() {
                                           _sensorBmLogEnable);
   printf("sensorBmLogEnable: %" PRIu32 "\n", _sensorBmLogEnable);
 
-
   PLUART::init(USER_TASK_PRIORITY);
   // Baud set to 9600, which is expected by the microDOT sensor
   PLUART::setBaud(BAUD_RATE);
@@ -99,7 +98,8 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
         d.temperature_deg_c = temp_signal.data.double_val;
         d.do_mg_per_l = do_signal.data.double_val;
         d.quality = q_signal.data.double_val;
-        d.do_saturation_pct = NULL;
+        // DO Sat% not available at this time; setting to NULL causes error (converting NULL to double)
+        //d.do_saturation_pct = 0;
         success = true;
       }
     } else {
@@ -124,7 +124,7 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
 bool PmeSensor::getWipeData(PmeWipeMsg::Data &d) {
   bool success = false;
   PLUART::write((uint8_t *)queryWIPE, sizeof(queryWIPE));
-
+  vTaskDelay(250);
   //Determine how to continue checking for a line of data from the sensor until a timeout occurs (20 seconds). (P.F.)
   if (PLUART::lineAvailable()) {
     uint16_t read_len = PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));

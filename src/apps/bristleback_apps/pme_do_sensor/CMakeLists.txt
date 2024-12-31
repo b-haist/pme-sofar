@@ -243,6 +243,7 @@ set(APP_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../bristleback_apps_common/bm_config.c
     ${CMAKE_CURRENT_SOURCE_DIR}/user_code/user_code.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../bristleback_apps_common/sensors/sensors.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/user_code/pme_do_sensor.cpp
     ${MCUBOOT_FILES}
     ${FREERTOS_FILES}
     ${LIB_FILES}

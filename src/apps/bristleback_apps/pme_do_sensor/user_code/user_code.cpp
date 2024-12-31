@@ -30,6 +30,7 @@
 extern cfg::Configuration *userConfigurationPartition;
 extern cfg::Configuration *systemConfigurationPartition;
 extern cfg::Configuration *hardwareConfigurationPartition;
+static PmeSensor pme_sensor;
 
 //holds the unix eopch time of the last wipe (P.F.)
 // changed from int to float to match member function in configuration.h (B.H)
@@ -40,8 +41,6 @@ static uint32_t line_term_config = 13; // Carraige Return, CR, 0x0D
 //Defines the max buffer size for the pme sensor message (P.F.)
 static constexpr uint32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;
 
-static PmeSensor pme_sensor;
-
 //Defines variables used in topic generation (P.F.)
 static char pme_do_topic[BM_TOPIC_MAX_LEN]; //DO
 static int pme_do_topic_str_len; //DO
@@ -49,6 +48,7 @@ static int pme_do_topic_str_len; //DO
 static char pme_wipe_topic[BM_TOPIC_MAX_LEN]; //Wipe
 static int pme_wipe_topic_str_len; //Wipe
 
+/*
 // Function to create the topic string for pme DO measurement data (P.F.)
 static int createPmeDoMeasurementDataTopic(void) {    //DO measurement
   int topic_str_len = snprintf(pme_do_topic, BM_TOPIC_MAX_LEN,
@@ -63,6 +63,7 @@ static int createPmeWipeDataTopic(void) {    //Wipe
   configASSERT(topic_str_len > 0 && topic_str_len < BM_TOPIC_MAX_LEN);
   return topic_str_len;
 }
+*/
 
 void setup(void) {
   /* USER ONE-TIME SETUP CODE GOES HERE */

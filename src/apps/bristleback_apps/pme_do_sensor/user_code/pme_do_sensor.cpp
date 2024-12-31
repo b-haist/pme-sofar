@@ -1,3 +1,5 @@
+#include <cstdint>
+#include <cstddef>
 #include "FreeRTOS.h"
 #include "bm_printf.h"
 #include "configuration.h"
@@ -37,6 +39,7 @@ void PmeSensor::init() {
   systemConfigurationPartition->getConfig(SENSOR_BM_LOG_ENABLE, strlen(SENSOR_BM_LOG_ENABLE),
                                           _sensorBmLogEnable);
   printf("sensorBmLogEnable: %" PRIu32 "\n", _sensorBmLogEnable);
+
 
   PLUART::init(USER_TASK_PRIORITY);
   // Baud set to 9600, which is expected by the microDOT sensor

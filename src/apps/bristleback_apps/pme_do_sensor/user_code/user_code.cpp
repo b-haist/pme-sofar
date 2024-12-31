@@ -34,6 +34,8 @@ extern cfg::Configuration *hardwareConfigurationPartition;
 //holds the unix eopch time of the last wipe (P.F.)
 // changed from int to float to match member function in configuration.h (B.H)
 static float lastWipeTime = 0;
+//Line terminator for userConfigurationPartition (B.H.)
+static uint32_t line_term_config = 13; // Carraige Return, CR, 0x0D
 
 //Defines the max buffer size for the pme sensor message (P.F.)
 static constexpr uint32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;
@@ -61,7 +63,6 @@ static int createPmeWipeDataTopic(void) {    //Wipe
   configASSERT(topic_str_len > 0 && topic_str_len < BM_TOPIC_MAX_LEN);
   return topic_str_len;
 }
-
 
 void setup(void) {
   /* USER ONE-TIME SETUP CODE GOES HERE */

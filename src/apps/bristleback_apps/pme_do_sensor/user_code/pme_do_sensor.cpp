@@ -11,6 +11,11 @@
 
 extern cfg::Configuration *systemConfigurationPartition;
 
+//Function to request a DO measurement from the microDOT sensor. (P.F.)
+static constexpr char queryMDOT[] = "MDOT\r";
+//Function to request a wipe from the microDOT sensor. (P.F.)
+static constexpr char queryWIPE[] = "WIPE\r";
+
 /**
  * @brief Initializes the Seapoint Turbidity Sensor.
  *
@@ -26,7 +31,7 @@ extern cfg::Configuration *systemConfigurationPartition;
  * - Sets a line termination character for the PLUART according to the protocol of the sensor.
  * - Enables the PLUART, effectively turning on the UART.
  */
-void SeapointTurbiditySensor::init() {
+void PmeSensor::init() {
   configASSERT(systemConfigurationPartition);
   _parser.init();
   systemConfigurationPartition->getConfig(SENSOR_BM_LOG_ENABLE, strlen(SENSOR_BM_LOG_ENABLE),
@@ -34,7 +39,7 @@ void SeapointTurbiditySensor::init() {
   printf("sensorBmLogEnable: %" PRIu32 "\n", _sensorBmLogEnable);
 
   PLUART::init(USER_TASK_PRIORITY);
-  // Baud set to 115200, which is expected by the Seapoint turbidity sensor
+  // Baud set to 9600, which is expected by the microDOT sensor
   PLUART::setBaud(BAUD_RATE);
   // Disable passing raw bytes to user app.
   PLUART::setUseByteStreamBuffer(false);
@@ -48,18 +53,20 @@ void SeapointTurbiditySensor::init() {
 }
 
 /**
- * @brief Retrieves data from the Seapoint Turbidity Sensor.
+ * @brief Retrieves DO data from the microDOT Sensor. (P.F.)
  *
  * This function checks if a line of data is available from the sensor. If available, it reads the line into a buffer.
  * It then logs the data along with the current system uptime and RTC time.
  * The function then attempts to parse the data from the buffer. If the parsing is successful and the data is of the correct type,
- * it populates the passed BmSeapointTurbidityDataMsg::Data structure with the parsed data and the current system time.
+ * it populates the passed PmeDissolvedOxygenMsg::Data structure with the parsed data and the current system time.
  *
- * @param d Reference to a BmSeapointTurbidityDataMsg::Data structure where the parsed data will be stored.
+ * @param d Reference to a PmeDissolvedOxygenMsg::Data structure where the parsed data will be stored.
  * @return Returns true if data was successfully retrieved and parsed, false otherwise.
  */
-bool SeapointTurbiditySensor::getData(BmSeapointTurbidityDataMsg::Data &d) {
+bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
   bool success = false;
+  PLUART::write((uint8_t *)queryMDOT, sizeof(queryMDOT));
+  vTaskDelay(250);
   if (PLUART::lineAvailable()) {
     uint16_t read_len = PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));
 
@@ -69,7 +76,7 @@ bool SeapointTurbiditySensor::getData(BmSeapointTurbidityDataMsg::Data &d) {
     rtcPrint(rtc_time_str, NULL);
 
     if (_sensorBmLogEnable) {
-      bm_fprintf(0, SEAPOINT_TURBIDITY_RAW_LOG, USE_TIMESTAMP, "tick: %" PRIu64 ", rtc: %s, line: %.*s\n",
+      bm_fprintf(0, PME_DO_RAW_LOG, USE_TIMESTAMP, "tick: %" PRIu64 ", rtc: %s, line: %.*s\n",
                  uptimeGetMs(), rtc_time_str, read_len, _payload_buffer);
     }
     bm_printf(0, "DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s", uptimeGetMs(),
@@ -78,22 +85,74 @@ bool SeapointTurbiditySensor::getData(BmSeapointTurbidityDataMsg::Data &d) {
            rtc_time_str, read_len, _payload_buffer);
 
     if (_parser.parseLine(_payload_buffer, read_len)) {
-      Value time_signal = _parser.getValue(0);
-      Value r_signal = _parser.getValue(1);
       Value temp_signal = _parser.getValue(2);
       Value do_signal = _parser.getValue(3);
       Value q_signal = _parser.getValue(4);
-      if (time_signal.type != TYPE_DOUBLE || r_signal.type != TYPE_DOUBLE || temp_signal.type != TYPE_DOUBLE || do_signal.type != TYPE_DOUBLE || q_signal.type != TYPE_DOUBLE) {
-        printf("Parsed invalid DOT data: time_signal: %d, r_signal: %d, temp_signal: %d, do_signal: %d, q_signal: %d\n", time_signal.type,
-               r_signal.type, temp_signal.type, do_signal.type, q_signal.type);
+      if ( temp_signal.type != TYPE_DOUBLE || do_signal.type != TYPE_DOUBLE || q_signal.type != TYPE_DOUBLE) {
+        printf("Parsed invalid DOT data: temp_signal: %d, do_signal: %d, q_signal: %d\n", temp_signal.type, do_signal.type, q_signal.type);
       } else {
         d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
         d.header.reading_uptime_millis = uptimeGetMs();
-        d.time_signal = time_signal.data.double_val;
-        d.r_signal = r_signal.data.double_val;
-        d.temp_signal = temp_signal.data.double_val;
-        d.do_signal = do_signal.data.double_val;
-        d.q_signal = q_signal.data.double_val;
+        d.temperature_deg_c = temp_signal.data.double_val;
+        d.do_mg_per_l = do_signal.data.double_val;
+        d.quality = q_signal.data.double_val;
+        d.do_saturation_pct = NULL;
+        success = true;
+      }
+    } else {
+      printf("Failed to parse DOT data\n");
+    }
+  }
+  return success;
+}
+
+/**
+ * @brief Retrieves Wipe data from the microDOT Sensor. (P.F.)
+ *
+ * This function requests a wipe and then waits for a line of data from the sensor for a set period. If available, it reads the line into a buffer.
+ * It then logs the data along with the current system uptime and RTC time.
+ * If data was not available, it logs a message indicating that no data was received.
+ * The function then attempts to parse the data from the buffer. If the parsing is successful and the data is of the correct type,
+ * it populates the passed PmeWipeMsg::Data structure with the parsed data and the current system time.
+ *
+ * @param d Reference to a PmeWipeMsg::Data structure where the parsed data will be stored.
+ * @return Returns true if data was successfully retrieved and parsed, false otherwise.
+ */
+bool PmeSensor::getWipeData(PmeWipeMsg::Data &d) {
+  bool success = false;
+  PLUART::write((uint8_t *)queryWIPE, sizeof(queryWIPE));
+
+  //Determine how to continue checking for a line of data from the sensor until a timeout occurs (20 seconds). (P.F.)
+  if (PLUART::lineAvailable()) {
+    uint16_t read_len = PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));
+
+    RTCTimeAndDate_t time_and_date = {};
+    rtcGet(&time_and_date);
+    char rtc_time_str[32] = {};
+    rtcPrint(rtc_time_str, NULL);
+
+    if (_sensorBmLogEnable) {
+      bm_fprintf(0, PME_DO_RAW_LOG, USE_TIMESTAMP, "tick: %" PRIu64 ", rtc: %s, line: %.*s\n",
+                 uptimeGetMs(), rtc_time_str, read_len, _payload_buffer);
+    }
+    bm_printf(0, "DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s", uptimeGetMs(),
+              rtc_time_str, read_len, _payload_buffer);
+    printf("DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s\n", uptimeGetMs(),
+           rtc_time_str, read_len, _payload_buffer);
+
+    if (_parser.parseLine(_payload_buffer, read_len)) {
+      Value temp_signal = _parser.getValue(2);
+      Value do_signal = _parser.getValue(3);
+      Value q_signal = _parser.getValue(4);
+      if ( temp_signal.type != TYPE_DOUBLE || do_signal.type != TYPE_DOUBLE || q_signal.type != TYPE_DOUBLE) {
+        printf("Parsed invalid DOT data: temp_signal: %d, do_signal: %d, q_signal: %d\n", temp_signal.type, do_signal.type, q_signal.type);
+      } else {
+        d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
+        d.header.reading_uptime_millis = uptimeGetMs();
+        d.temperature_deg_c = temp_signal.data.double_val;
+        d.do_mg_per_l = do_signal.data.double_val;
+        d.quality = q_signal.data.double_val;
+        d.do_saturation_pct = NULL;
         success = true;
       }
     } else {
@@ -106,4 +165,4 @@ bool SeapointTurbiditySensor::getData(BmSeapointTurbidityDataMsg::Data &d) {
 /**
  * @brief Flushes the data from the sensor driver.
  */
-void SeapointTurbiditySensor::flush(void) { PLUART::reset(); }
+void PmeSensor::flush(void) { PLUART::reset(); }

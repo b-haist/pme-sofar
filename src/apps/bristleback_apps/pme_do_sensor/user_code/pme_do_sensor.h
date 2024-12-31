@@ -1,18 +1,21 @@
 #pragma once
 #include <stdint.h>
 #include "OrderedSeparatorLineParser.h"
-#include "bm_seapoint_turbidity_data_msg.h"
+#include "pme_dissolved_oxygen_msg.h"
+#include "pme_wipe_msg.h"
 
-class PmeDoSensor {
+class PmeSensor {
   public:
-    PmeDoSensor()
+    PmeSensor()
         : _parser(",", 256, PARSER_VALUE_TYPE, 5){};
     void init();
-    bool getData(BmSeapointTurbidityDataMsg::Data &d);
+    bool getDoData(PmeDissolvedOxygenMsg::Data &d);
+    bool getWipeData(PmeWipeMsg::Data &d);
     void flush(void);
 
   public:
-    static constexpr char SEAPOINT_TURBIDITY_RAW_LOG[] = "seapoint_turbidity_raw.log";
+    static constexpr char PME_DO_RAW_LOG[] = "pme_do_raw.log";
+    static constexpr char PME_WIPE_RAW_LOG[] = "pme_wipe_raw.log";
 
   private:
     static constexpr uint32_t BAUD_RATE = 9600;

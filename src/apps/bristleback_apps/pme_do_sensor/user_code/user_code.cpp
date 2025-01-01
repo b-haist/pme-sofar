@@ -38,7 +38,7 @@ static PmeSensor pme_sensor;
 // changed from int to float to match member function in configuration.h (B.H)
 static float lastWipeTime = 0;
 //Line terminator for userConfigurationPartition (B.H.)
-static u_int32_t line_term_config = 13; // Carraige Return, CR, 0x0D
+static u_int32_t line_term_config = 13; // Carraige  Return, CR, 0x0D
 
 //Defines the max buffer size for the pme sensor message (P.F.)
 static constexpr u_int32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;

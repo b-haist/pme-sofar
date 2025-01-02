@@ -127,9 +127,11 @@ void setup(void) {
 void loop(void) {
   // timing testing
   // Get the current RTC time
-  RTCTimeAndDate_t currentTime = {};
-  rtcGet(&currentTime);
-
+  RTCTimeAndDate_t time_and_date = {};
+  rtcGet(&time_and_date);
+  char rtcTimeBuffer[32];
+  rtcPrint(rtcTimeBuffer, &time_and_date);
+  
   // Convert RTC time to Unix epoch
   uint32_t currentUnixTime = rtcToUnixEpoch(currentTime);
 

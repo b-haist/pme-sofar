@@ -1,4 +1,5 @@
 #include "user_code.h"
+#include "configuration.h"
 #include "bm_network.h"
 #include "bm_printf.h"
 #include "bm_pubsub.h"
@@ -20,25 +21,46 @@
 #include <string.h>
 #include "pme_do_sensor.h"
 #include "FreeRTOS.h"
-#include "configuration.h"
 #include "serial.h" 
 #include "OrderedSeparatorLineParser.h"
 #include "device_info.h"
 #include "io.h"
 #include <sys/types.h>
+#include <ctime>
 #include "pme_dissolved_oxygen_msg.h"
 
 // app_main passes a handle to the config partitions in NVM.
-extern cfg::Configuration *userConfigurationPartition;
+//extern cfg::Configuration *userConfigurationPartition;
 extern cfg::Configuration *systemConfigurationPartition;
-extern cfg::Configuration *hardwareConfigurationPartition;
+//extern cfg::Configuration *hardwareConfigurationPartition;
 static PmeSensor pme_sensor;
 
 //holds the unix eopch time of the last wipe (P.F.)
 // changed from int to float to match member function in configuration.h (B.H)
-static float lastWipeTime = 0;
+//static float lastWipeTime = 0;
 //Line terminator for userConfigurationPartition (B.H.)
-static u_int32_t line_term_config = 13; // Carraige  Return, CR, 0x0D
+//static u_int32_t line_term_config = 13; // Carraige  Return, CR, 0x0D
+
+// Define DO measurement interval (e.g., 600 seconds = 10 minutes)
+static constexpr uint32_t DO_MEASUREMENT_INTERVAL_SEC = 600;
+
+// Variable to store the last DO measurement time (in Unix epoch seconds)
+static uint32_t lastDoMeasurementTime = 0;
+
+
+
+// Helper function to convert `RTCTimeAndDate_t` to Unix epoch time
+uint32_t rtcToUnixEpoch(const RTCTimeAndDate_t &time) {
+    struct tm tm = {};
+    tm.tm_year = time.year - 1900; // `tm_year` is years since 1900
+    tm.tm_mon = time.month - 1;    // `tm_mon` is 0-based
+    tm.tm_mday = time.day;
+    tm.tm_hour = time.hour;
+    tm.tm_min = time.minute;
+    tm.tm_sec = time.second;
+
+    return (uint32_t)mktime(&tm);
+}
 
 //Defines the max buffer size for the pme sensor message (P.F.)
 static constexpr u_int32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;
@@ -70,8 +92,8 @@ static int createPmeWipeDataTopic(void) {    //Wipe
 void setup(void) {
   /* USER ONE-TIME SETUP CODE GOES HERE */
   // Retrieve user-set config values out of NVM.
-  hardwareConfigurationPartition->getConfig("plUartBaudRate", strlen("plUartBaudRate"), lastWipeTime);
-  userConfigurationPartition->getConfig("plUartLineTerm", strlen("plUartLineTerm"), line_term_config);
+  //hardwareConfigurationPartition->getConfig("plUartBaudRate", strlen("plUartBaudRate"), lastWipeTime);
+  //userConfigurationPartition->getConfig("plUartLineTerm", strlen("plUartLineTerm"), line_term_config);
   
   //Perform pme sensor setup which includes PLUART setup (P.F.)
   pme_sensor.init();
@@ -85,7 +107,7 @@ void setup(void) {
   IOWrite(&LED_BLUE, 0);
   IOWrite(&LED_GREEN, 0);
   IOWrite(&LED_RED, 0);
-
+  // Write code to request sensor S/N and save to config 
   /*trigger Initial DO measurement*/
   static PmeDissolvedOxygenMsg::Data d;
   if (pme_sensor.getDoData(d)) {
@@ -103,19 +125,36 @@ void setup(void) {
 
 
 void loop(void) {
-  
-  //If time to perform a DO measurement
-  //Compare last DO measurement time to current time. If difference is greater than DO interval, perform DO measurement.
-  static PmeDissolvedOxygenMsg::Data d;
-  if (pme_sensor.getDoData(d)) {
-    static uint8_t cbor_buf[PME_SENSOR_DATA_MSG_MAX_SIZE];
-    size_t encoded_len = 0;
-    if (PmeDissolvedOxygenMsg::encode(d, cbor_buf, sizeof(cbor_buf), &encoded_len) == CborNoError) {
-      bm_pub_wl(pme_do_topic, pme_do_topic_str_len, cbor_buf, encoded_len, 0);
+  // timing testing
+  // Get the current RTC time
+  RTCTimeAndDate_t currentTime = {};
+  rtcGet(&currentTime);
+
+  // Convert RTC time to Unix epoch
+  uint32_t currentUnixTime = rtcToUnixEpoch(currentTime);
+
+  // Check if enough time has passed since the last DO measurement
+  if (currentUnixTime - lastDoMeasurementTime >= DO_MEASUREMENT_INTERVAL_SEC) {
+    // Update the last measurement time
+    lastDoMeasurementTime = currentUnixTime;
+
+    // Perform a DO measurement
+    static PmeDissolvedOxygenMsg::Data d;
+    if (pme_sensor.getDoData(d)) {
+        static uint8_t cbor_buf[PME_SENSOR_DATA_MSG_MAX_SIZE];
+        size_t encoded_len = 0;
+        if (PmeDissolvedOxygenMsg::encode(d, cbor_buf, sizeof(cbor_buf), &encoded_len) == CborNoError) {
+            bm_pub_wl(pme_do_topic, pme_do_topic_str_len, cbor_buf, encoded_len, 0);
+            printf("DO measurement performed and published at %u (Unix time)\n", currentUnixTime);
+        } else {
+            printf("Failed to encode DO measurement data message\n");
+        }
     } else {
-      printf("Failed to encode DO measurement data message\n");
+        printf("Failed to perform DO measurement\n");
     }
   }
+  //If time to perform a DO measurement
+  //Compare last DO measurement time to current time. If difference is greater than DO interval, perform DO measurement.
 
   //If time to perform a Wipe
   //Retrieve last wipe time from NVM and compare it to current time. If difference is greater than wipe interval, perform wipe.
@@ -128,7 +167,5 @@ void loop(void) {
     } else {
       printf("Failed to encode Wipe data message\n");
     }
-
   }
-
 }

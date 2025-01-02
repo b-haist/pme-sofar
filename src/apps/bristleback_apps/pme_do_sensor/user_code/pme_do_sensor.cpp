@@ -11,12 +11,28 @@
 #include "uptime.h"
 #include "util.h"
 
+static bool BmRbrWatchdogHandler(void *arg) {
+  (void)arg;
+  bm_fprintf(0, RbrSensor::RBR_RAW_LOG, USE_TIMESTAMP, "DEBUG - attempting FTL recovery\n");
+  bm_printf(0, "DEBUG - attempting FTL recovery");
+  printf("DEBUG - attempting FTL recovery\n");
+  IOWrite(&BB_PL_BUCK_EN, 1);
+  vTaskDelay(pdMS_TO_TICKS(ftl_recovery_ms));
+  rbr_sensor.flush();
+  IOWrite(&BB_PL_BUCK_EN, 0);
+  last_payload_power_on_time = uptimeGetMs();
+  return true;
+}
+
+
 extern cfg::Configuration *systemConfigurationPartition;
 
 //Function to request a DO measurement from the microDOT sensor. (P.F.)
 static constexpr char queryMDOT[] = "MDOT\r";
 //Function to request a wipe from the microDOT sensor. (P.F.)
-static constexpr char queryWIPE[] = "WIPE\r";
+static constexpr char queryWIPE[] = "WDOT\r";
+//Function to request a serial number of the microdot (B.H.)
+static constexpr char querySN[] = "SN\r";
 
 /**
  * @brief Initializes the Seapoint Turbidity Sensor.

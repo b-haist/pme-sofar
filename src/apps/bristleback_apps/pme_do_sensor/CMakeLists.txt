@@ -41,6 +41,7 @@ set(BRISTLEMOUTH_INCLUDES
 
 set(LIB_FILES
     ${SRC_DIR}/lib/cli/cli.c
+	${SRC_DIR}/lib/common/avgSampler.cpp
     ${SRC_DIR}/lib/common/bootloader_helper.c
     ${SRC_DIR}/lib/common/device_info.c
     ${SRC_DIR}/lib/common/enumToStr.c
@@ -60,12 +61,14 @@ set(LIB_FILES
     ${SRC_DIR}/lib/common/stress.c
     ${SRC_DIR}/lib/common/uptime.c
     ${SRC_DIR}/lib/common/util.c
-    ${SRC_DIR}/lib/common/watchdog.c
     ${SRC_DIR}/lib/common/sensorWatchdog.cpp
+    ${SRC_DIR}/lib/common/watchdog.c
     ${SRC_DIR}/lib/common/timer_callback_handler.cpp
     ${SRC_DIR}/lib/bm_common_messages/sys_info_svc_reply_msg.cpp
     ${SRC_DIR}/lib/bm_common_messages/config_cbor_map_srv_request_msg.cpp
     ${SRC_DIR}/lib/bm_common_messages/config_cbor_map_srv_reply_msg.cpp
+	${SRC_DIR}/lib/bm_common_messages/pme_dissolved_oxygen_msg.cpp
+	${SRC_DIR}/lib/bm_common_messages/sensor_header_msg.cpp
     ${SRC_DIR}/lib/sys/ram_partitions.c
     ${SRC_DIR}/lib/sys/configuration.cpp
     ${SRC_DIR}/lib/debug/debug.c
@@ -109,6 +112,7 @@ set(LIB_FILES
     ${SRC_DIR}/lib/sensor_sampler/htuSampler.cpp
     ${SRC_DIR}/lib/sensor_sampler/powerSampler.cpp
     ${SRC_DIR}/lib/common/LineParser.cpp
+	${SRC_DIR}/lib/common/OrderedSeparatorLineParser.cpp
     ${SRC_DIR}/third_party/aligned_malloc/aligned_malloc.c
     ${SRC_DIR}/third_party/crc/crc16.c
     ${SRC_DIR}/third_party/crc/crc32.c
@@ -246,6 +250,7 @@ set(APP_FILES
 	${CMAKE_CURRENT_SOURCE_DIR}/user_code/pme_do_sensor.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/bm_common_messages/pme_wipe_msg.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/bm_common_messages/pme_dissolved_oxygen_msg.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../../../lib/bm_common_messages/sensor_header_msg.cpp
     ${MCUBOOT_FILES}
     ${FREERTOS_FILES}
     ${LIB_FILES}

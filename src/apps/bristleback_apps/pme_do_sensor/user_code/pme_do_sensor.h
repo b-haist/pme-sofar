@@ -10,7 +10,8 @@ class PmeSensor {
         : _parser(",", 256, PARSER_VALUE_TYPE, 5){};
     void init();
     bool getDoData(PmeDissolvedOxygenMsg::Data &d);
-    bool getWipeData(PmeWipeMsg::Data &d);
+    bool getWipeData(PmeWipeMsg::Data &w);
+    bool getSN(PmeDissolvedOxygenMsg::Data &s);
     void flush(void);
 
   public:

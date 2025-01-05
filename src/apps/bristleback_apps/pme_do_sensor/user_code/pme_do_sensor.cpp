@@ -55,6 +55,10 @@ void PmeSensor::init() {
   PLUART::setTerminationCharacter(LINE_TERM);
   // Turn on the UART.
   PLUART::enable();
+  PLUART::write((uint8_t *)querySN, sizeof(querySN));
+  vTaskDelay(250);
+  PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));
+  printf("Read line: %s\n", _payload_buffer);
 }
 
 /**
@@ -74,7 +78,6 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
   vTaskDelay(250);
   if (PLUART::lineAvailable()) {
     uint16_t read_len = PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));
-
     RTCTimeAndDate_t time_and_date = {};
     rtcGet(&time_and_date);
     char rtc_time_str[32] = {};
@@ -90,17 +93,21 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
            rtc_time_str, read_len, _payload_buffer);
 
     if (_parser.parseLine(_payload_buffer, read_len)) {
+      // printf("Parsed line: %.*s\n", read_len, _payload_buffer);  // Debugging; remove later
+      rtcGet(&time_and_date);
       Value temp_signal = _parser.getValue(2);
       Value do_signal = _parser.getValue(3);
       Value q_signal = _parser.getValue(4);
       if ( temp_signal.type != TYPE_DOUBLE || do_signal.type != TYPE_DOUBLE || q_signal.type != TYPE_DOUBLE) {
-        printf("Parsed invalid DOT data: temp_signal: %d, do_signal: %d, q_signal: %d\n", temp_signal.type, do_signal.type, q_signal.type);
+        printf("Parsed invalid DOT data");
       } else {
-        d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
+        d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000; // bugged; reads 0
         d.header.reading_uptime_millis = uptimeGetMs();
         d.temperature_deg_c = temp_signal.data.double_val;
         d.do_mg_per_l = do_signal.data.double_val;
         d.quality = q_signal.data.double_val;
+        printf("### Parsed DOT data: temp: %.3f, DO: %.3f, Q: %.3f\n", d.temperature_deg_c, d.do_mg_per_l, d.quality);
+        printf("### Reading time: %llu, uptime: %llu\n", d.header.reading_time_utc_ms, d.header.reading_uptime_millis);
         // DO Sat% not available at this time; setting to NULL causes error (converting NULL to double)
         //d.do_saturation_pct = 0;
         success = true;
@@ -121,10 +128,10 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
  * The function then attempts to parse the data from the buffer. If the parsing is successful and the data is of the correct type,
  * it populates the passed PmeWipeMsg::Data structure with the parsed data and the current system time.
  *
- * @param d Reference to a PmeWipeMsg::Data structure where the parsed data will be stored.
+ * @param w Reference to a PmeWipeMsg::Data structure where the parsed data will be stored.
  * @return Returns true if data was successfully retrieved and parsed, false otherwise.
  */
-bool PmeSensor::getWipeData(PmeWipeMsg::Data &d) {
+bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
   bool success = false;
   PLUART::write((uint8_t *)queryWIPE, sizeof(queryWIPE));
   vTaskDelay(250);
@@ -154,10 +161,10 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &d) {
         printf("Parsed invalid DOT data: wipe_current_mean_mA: %d, wipe_duration (sec): %d\n", wipe_current_mean_mA.type, wipe_duration.type);
         } 
       else {
-        d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
-        d.header.reading_uptime_millis = uptimeGetMs();
-        d.wipe_current_mean_ma = wipe_current_mean_mA.data.double_val;
-        d.wipe_duration_s = wipe_duration.data.double_val;
+        w.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
+        w.header.reading_uptime_millis = uptimeGetMs();
+        w.wipe_current_mean_ma = wipe_current_mean_mA.data.double_val;
+        w.wipe_duration_s = wipe_duration.data.double_val;
         success = true;
         }
     } 

@@ -47,7 +47,7 @@ static PmeSensor pme_sensor;
 static constexpr uint32_t DO_MEASUREMENT_INTERVAL_SEC = 600;
 
 // Variable to store the last DO measurement time (in Unix epoch seconds)
-static uint64_t lastDoMeasurementTime = 0;
+// static uint64_t lastDoMeasurementTime = 0;
 
 
 //Defines the max buffer size for the pme sensor message (P.F.)
@@ -57,8 +57,8 @@ static constexpr u_int32_t PME_SENSOR_DATA_MSG_MAX_SIZE = 256;
 static char pme_do_topic[BM_TOPIC_MAX_LEN]; //DO
 static int pme_do_topic_str_len; //DO
 
-static char pme_wipe_topic[BM_TOPIC_MAX_LEN]; //Wipe
-static int pme_wipe_topic_str_len; //Wipe
+// static char pme_wipe_topic[BM_TOPIC_MAX_LEN]; //Wipe
+// static int pme_wipe_topic_str_len; //Wipe
 
 
 // Function to create the topic string for pme DO measurement data (P.F.)
@@ -116,31 +116,33 @@ void setup(void) {
 void loop(void) {
   // timing testing
   // Get the current RTC time
-  RTCTimeAndDate_t time_and_date = {};
-  rtcGet(&time_and_date);
-  char rtcTimeBuffer[32];
-  rtcPrint(rtcTimeBuffer, NULL);
-  bm_fprintf(0, "payload_data.log", USE_TIMESTAMP, "tick: %llu, rtc: %s\n", uptimeGetMs(), rtcTimeBuffer);
-  // Convert RTC time to Unix epoch
-  uint64_t currentUnixTime = rtcGetMicroSeconds(&time_and_date);
+  // RTCTimeAndDate_t time_and_date = {};
+  // rtcGet(&time_and_date);
+  // char rtcTimeBuffer[32];
+  // rtcPrint(rtcTimeBuffer, NULL);
+  // bm_fprintf(0, "payload_data.log", USE_TIMESTAMP, "tick: %llu, rtc: %s\n", uptimeGetMs(), rtcTimeBuffer);
+  // // Convert RTC time to Unix epoch
+  // uint64_t currentUnixTime = rtcGetMicroSeconds(&time_and_date);
   // Check if enough time has passed since the last DO measurement
-    //if (currentUnixTime - lastDoMeasurementTime >= DO_MEASUREMENT_INTERVAL_SEC) {
-    // Update the last measurement time
-    lastDoMeasurementTime = currentUnixTime;
-    printf("DO measurement performed and published at %u (Unix time)\n", currentUnixTime);
-    // Perform a DO measurement
+  // if (currentUnixTime - lastDoMeasurementTime >= DO_MEASUREMENT_INTERVAL_SEC) {
+  // Update the last measurement time
+  // lastDoMeasurementTime = currentUnixTime;
+  // printf("DO measurement performed and published at %u (Unix time)\n", currentUnixTime);
+  // Perform a DO measurement
     static PmeDissolvedOxygenMsg::Data d;
-
-
     if (pme_sensor.getDoData(d)) {
       static uint8_t cbor_buf[PME_SENSOR_DATA_MSG_MAX_SIZE];
       size_t encoded_len = 0;
       if (PmeDissolvedOxygenMsg::encode(d, cbor_buf, sizeof(cbor_buf), &encoded_len) == CborNoError) {
         bm_pub_wl(pme_do_topic, pme_do_topic_str_len, cbor_buf, encoded_len, 0);
-      } else {
+        // printf("DO encoding performed and published!\n"); //debugging
+        printf("### DO Encoding success! | Topic: %s, cbor_buf: %d, \n", pme_do_topic, cbor_buf); //debugging  
+      }
+      else {
         printf("Failed to encode DO measurement data message\n");
       }
-    } else {
+    } 
+    else {
       printf("Failed to perform DO measurement\n");
     }
   //}
@@ -149,15 +151,15 @@ void loop(void) {
 
   //If time to perform a Wipe
   //Retrieve last wipe time from NVM and compare it to current time. If difference is greater than wipe interval, perform wipe.
-  static PmeWipeMsg::Data w;
-  if (pme_sensor.getWipeData(w)) {
-    static uint8_t cbor_buf[PME_SENSOR_DATA_MSG_MAX_SIZE];
-    size_t encoded_len = 0;
-    if (PmeWipeMsg::encode(w, cbor_buf, sizeof(cbor_buf), &encoded_len) == CborNoError) {
-      bm_pub_wl(pme_wipe_topic, pme_wipe_topic_str_len, cbor_buf, encoded_len, 0);
-    } else {
-      printf("Failed to encode Wipe data message\n");
-    }
-  }
+  // static PmeWipeMsg::Data w;
+  // if (pme_sensor.getWipeData(w)) {
+  //   static uint8_t cbor_buf[PME_SENSOR_DATA_MSG_MAX_SIZE];
+  //   size_t encoded_len = 0;
+  //   if (PmeWipeMsg::encode(w, cbor_buf, sizeof(cbor_buf), &encoded_len) == CborNoError) {
+  //     bm_pub_wl(pme_wipe_topic, pme_wipe_topic_str_len, cbor_buf, encoded_len, 0);
+  //   } else {
+  //     printf("Failed to encode Wipe data message\n");
+  //   }
+  // }
   vTaskDelay(10000);
 }

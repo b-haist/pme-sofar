@@ -82,8 +82,9 @@ void PmeSensor::init() {
  */
 bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
   bool success = false;
-  PLUART::write((uint8_t *)queryMDOT, strlen(queryMDOT));
   vTaskDelay(250);
+  PLUART::write((uint8_t *)queryMDOT, strlen(queryMDOT));
+  vTaskDelay(3000);
   if (PLUART::lineAvailable()) {
     uint16_t do_read_len = PLUART::readLine(_DOTpayload_buffer, sizeof(_DOTpayload_buffer));
     //printf("### DOT Read line: %s\n", _DOTpayload_buffer);
@@ -146,9 +147,8 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
     vTaskDelay(250);
     PLUART::write((uint8_t *)queryWIPE, strlen(queryWIPE));
     // printf("### Wipe query sent\n");
-    vTaskDelay(1000); // Increase delay to ensure enough time between writing and reading
+    vTaskDelay(8000); // Increase delay to ensure enough time between writing and reading
     // printf("### Wipe delay complete\n");
-
     if (PLUART::lineAvailable()) {
         uint16_t wipe_read_len = PLUART::readLine(_WIPEpayload_buffer, sizeof(_WIPEpayload_buffer));
         printf("### WIPE Read line: %s\n", _WIPEpayload_buffer);

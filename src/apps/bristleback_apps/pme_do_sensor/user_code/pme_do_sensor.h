@@ -13,7 +13,7 @@ class PmeSensor {
     bool getDoData(PmeDissolvedOxygenMsg::Data &d);
     bool getWipeData(PmeWipeMsg::Data &w);
     bool getSN(PmeDissolvedOxygenMsg::Data &s);
-    void flush(void);
+    void flush();
 
   public:
     static constexpr char PME_DO_RAW_LOG[] = "pme_do_raw.log";

@@ -10,6 +10,8 @@
 #include "task_priorities.h"
 #include "uptime.h"
 #include "util.h"
+#include <cstdio>
+#include <cstring>
 
 extern cfg::Configuration *systemConfigurationPartition;
 
@@ -37,7 +39,8 @@ static constexpr char querySN[] = "SN\r";
  */
 void PmeSensor::init() {
   configASSERT(systemConfigurationPartition);
-  _parser.init();
+  _WIPEparser.init();
+  _DOTparser.init();
   vTaskDelay(10000);
   systemConfigurationPartition->getConfig(SENSOR_BM_LOG_ENABLE, strlen(SENSOR_BM_LOG_ENABLE),
                                           _sensorBmLogEnable);
@@ -57,8 +60,13 @@ void PmeSensor::init() {
   PLUART::enable();
   PLUART::write((uint8_t *)querySN, sizeof(querySN));
   vTaskDelay(250);
-  PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));
-  printf("Read line: %s\n", _payload_buffer);
+  if (PLUART::lineAvailable()) {
+    PLUART::readLine(_SNpayload_buffer, sizeof(_SNpayload_buffer));
+    printf("~~~ Communication established! S/N: %s\n", _SNpayload_buffer);
+  }
+  else {
+    printf("!!! No data received - is the device connected?\n");
+  }
 }
 
 /**
@@ -74,10 +82,11 @@ void PmeSensor::init() {
  */
 bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
   bool success = false;
-  PLUART::write((uint8_t *)queryMDOT, sizeof(queryMDOT));
+  PLUART::write((uint8_t *)queryMDOT, strlen(queryMDOT));
   vTaskDelay(250);
   if (PLUART::lineAvailable()) {
-    uint16_t read_len = PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));
+    uint16_t do_read_len = PLUART::readLine(_DOTpayload_buffer, sizeof(_DOTpayload_buffer));
+    //printf("### DOT Read line: %s\n", _DOTpayload_buffer);
     RTCTimeAndDate_t time_and_date = {};
     rtcGet(&time_and_date);
     char rtc_time_str[32] = {};
@@ -85,38 +94,39 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
 
     if (_sensorBmLogEnable) {
       bm_fprintf(0, PME_DO_RAW_LOG, USE_TIMESTAMP, "tick: %" PRIu64 ", rtc: %s, line: %.*s\n",
-                 uptimeGetMs(), rtc_time_str, read_len, _payload_buffer);
+                 uptimeGetMs(), rtc_time_str, do_read_len, _DOTpayload_buffer);
     }
     bm_printf(0, "DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s", uptimeGetMs(),
-              rtc_time_str, read_len, _payload_buffer);
+              rtc_time_str, do_read_len, _DOTpayload_buffer);
     printf("DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s\n", uptimeGetMs(),
-           rtc_time_str, read_len, _payload_buffer);
+           rtc_time_str, do_read_len, _DOTpayload_buffer);
 
-    if (_parser.parseLine(_payload_buffer, read_len)) {
-      // printf("Parsed line: %.*s\n", read_len, _payload_buffer);  // Debugging; remove later
+    if (_DOTparser.parseLine(_DOTpayload_buffer, do_read_len)) {
+      //printf("Parsed DOT line: %.*s\n", do_read_len, _DOTpayload_buffer);  // Debugging; remove later
       rtcGet(&time_and_date);
-      Value temp_signal = _parser.getValue(2);
-      Value do_signal = _parser.getValue(3);
-      Value q_signal = _parser.getValue(4);
+      Value temp_signal = _DOTparser.getValue(1);
+      Value do_signal = _DOTparser.getValue(2);
+      Value q_signal = _DOTparser.getValue(3);
       if ( temp_signal.type != TYPE_DOUBLE || do_signal.type != TYPE_DOUBLE || q_signal.type != TYPE_DOUBLE) {
         printf("Parsed invalid DOT data");
       } else {
-        d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000; // bugged; reads 0
+        d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
         d.header.reading_uptime_millis = uptimeGetMs();
         d.temperature_deg_c = temp_signal.data.double_val;
         d.do_mg_per_l = do_signal.data.double_val;
         d.quality = q_signal.data.double_val;
-        printf("### Parsed DOT data: temp: %.3f, DO: %.3f, Q: %.3f\n", d.temperature_deg_c, d.do_mg_per_l, d.quality);
-        printf("### Reading time: %llu, uptime: %llu\n", d.header.reading_time_utc_ms, d.header.reading_uptime_millis);
+        printf("### Epoch time: %llu, Uptime: %llu  |  temp: %.3f, DO: %.3f, Q: %.3f\n", d.header.reading_time_utc_ms, d.header.reading_uptime_millis, d.temperature_deg_c, d.do_mg_per_l, d.quality);
         // DO Sat% not available at this time; setting to NULL causes error (converting NULL to double)
         //d.do_saturation_pct = 0;
         success = true;
       }
-    } else {
+    } 
+    else {
       printf("Failed to parse DOT data\n");
     }
   }
   return success;
+
 }
 
 /**
@@ -132,47 +142,63 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
  * @return Returns true if data was successfully retrieved and parsed, false otherwise.
  */
 bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
-  bool success = false;
-  PLUART::write((uint8_t *)queryWIPE, sizeof(queryWIPE));
-  vTaskDelay(250);
-  //Determine how to continue checking for a line of data from the sensor until a timeout occurs (20 seconds). (P.F.)
-  if (PLUART::lineAvailable()) {
-    uint16_t read_len = PLUART::readLine(_payload_buffer, sizeof(_payload_buffer));
+    bool success = false;
+    vTaskDelay(250);
+    PLUART::write((uint8_t *)queryWIPE, strlen(queryWIPE));
+    // printf("### Wipe query sent\n");
+    vTaskDelay(1000); // Increase delay to ensure enough time between writing and reading
+    // printf("### Wipe delay complete\n");
 
-    RTCTimeAndDate_t time_and_date = {};
-    rtcGet(&time_and_date);
-    char rtc_time_str[32] = {};
-    rtcPrint(rtc_time_str, NULL);
+    if (PLUART::lineAvailable()) {
+        uint16_t wipe_read_len = PLUART::readLine(_WIPEpayload_buffer, sizeof(_WIPEpayload_buffer));
+        printf("### WIPE Read line: %s\n", _WIPEpayload_buffer);
+        RTCTimeAndDate_t time_and_date = {};
+        rtcGet(&time_and_date);
+        char rtc_time_str[32] = {};
+        rtcPrint(rtc_time_str, NULL);
 
-    if (_sensorBmLogEnable) {
-      bm_fprintf(0, PME_DO_RAW_LOG, USE_TIMESTAMP, "tick: %" PRIu64 ", rtc: %s, line: %.*s\n",
-                 uptimeGetMs(), rtc_time_str, read_len, _payload_buffer);
-    }
-    bm_printf(0, "DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s", uptimeGetMs(),
-              rtc_time_str, read_len, _payload_buffer);
-    printf("DOT | tick: %" PRIu64 ", rtc: %s, line: %.*s\n", uptimeGetMs(),
-           rtc_time_str, read_len, _payload_buffer);
-
-    // Expect readout in format +90 (wipe_current_mean_mA), +5 (wipe_duration_s)
-    if (_parser.parseLine(_payload_buffer, read_len)) {
-      Value wipe_current_mean_mA = _parser.getValue(0);
-      Value wipe_duration = _parser.getValue(1);
-      if (wipe_current_mean_mA.type != TYPE_DOUBLE || wipe_duration.type != TYPE_DOUBLE) { 
-        printf("Parsed invalid DOT data: wipe_current_mean_mA: %d, wipe_duration (sec): %d\n", wipe_current_mean_mA.type, wipe_duration.type);
-        } 
-      else {
-        w.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
-        w.header.reading_uptime_millis = uptimeGetMs();
-        w.wipe_current_mean_ma = wipe_current_mean_mA.data.double_val;
-        w.wipe_duration_s = wipe_duration.data.double_val;
-        success = true;
+        if (_sensorBmLogEnable) {
+            bm_fprintf(0, PME_WIPE_RAW_LOG, USE_TIMESTAMP, "tick: %" PRIu64 ", rtc: %s, line: %.*s\n",
+                       uptimeGetMs(), rtc_time_str, wipe_read_len, _WIPEpayload_buffer);
         }
-    } 
-    else {
-      printf("Failed to parse DOT data\n");
+        bm_printf(0, "WIPE | tick: %" PRIu64 ", rtc: %s, line: %.*s", uptimeGetMs(),
+                  rtc_time_str, wipe_read_len, _WIPEpayload_buffer);
+        printf("WIPE | tick: %" PRIu64 ", rtc: %s, line: %.*s\n", uptimeGetMs(),
+               rtc_time_str, wipe_read_len, _WIPEpayload_buffer);
+
+        if (_WIPEparser.parseLine(_WIPEpayload_buffer, wipe_read_len)) {
+            printf("Parsed WIPE line: %.*s\n", wipe_read_len, _WIPEpayload_buffer);  // Debugging; remove later
+            rtcGet(&time_and_date);
+            Value wipe_time = _WIPEparser.getValue(0);
+            Value start1_mA = _WIPEparser.getValue(1);
+            Value avg1_mA = _WIPEparser.getValue(2);
+            Value start2_mA = _WIPEparser.getValue(3);
+            Value avg2_mA = _WIPEparser.getValue(4);
+            Value rsource = _WIPEparser.getValue(5);
+            if (wipe_time.type != TYPE_DOUBLE || start1_mA.type != TYPE_DOUBLE || avg1_mA.type != TYPE_DOUBLE ||
+                start2_mA.type != TYPE_DOUBLE || avg2_mA.type != TYPE_DOUBLE || rsource.type != TYPE_DOUBLE) {
+                printf("Parsed invalid WIPE data\n");
+            } else {
+                w.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
+                w.header.reading_uptime_millis = uptimeGetMs();
+                w.wipe_time_sec = wipe_time.data.double_val;
+                w.start1_mA = start1_mA.data.double_val;
+                w.avg1_mA = avg1_mA.data.double_val;
+                w.start2_mA = start2_mA.data.double_val;
+                w.avg2_mA = avg2_mA.data.double_val;
+                w.rsource = rsource.data.double_val;
+                printf("### Epoch time: %llu, Uptime: %llu  |  Wipe time: %.3f, Start1: %.3f, Avg1: %.3f, Start2: %.3f, Avg2: %.3f, Rsource: %.3f\n",
+                       w.header.reading_time_utc_ms, w.header.reading_uptime_millis, w.wipe_time_sec, w.start1_mA, w.avg1_mA, w.start2_mA, w.avg2_mA, w.rsource);
+                success = true;
+            }
+        } else {
+            printf("Failed to parse WIPE data\n");
+        }
+    } else {
+        printf("No line available from PLUART\n");
     }
-  }
-  return success;
+
+    return success;
 }
 
 /**

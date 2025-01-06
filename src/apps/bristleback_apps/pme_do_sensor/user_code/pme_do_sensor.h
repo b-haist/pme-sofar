@@ -7,7 +7,8 @@
 class PmeSensor {
   public:
     PmeSensor()
-        : _parser(",", 256, PARSER_VALUE_TYPE, 5){};
+        : _DOTparser(",", 256, DOT_PARSER_VALUE_TYPE, 4),
+          _WIPEparser(",", 256, WIPE_PARSER_VALUE_TYPE, 6) {};
     void init();
     bool getDoData(PmeDissolvedOxygenMsg::Data &d);
     bool getWipeData(PmeWipeMsg::Data &w);
@@ -21,11 +22,15 @@ class PmeSensor {
   private:
     static constexpr u_int32_t BAUD_RATE = 9600;
     static constexpr char LINE_TERM = '\r';
-    static constexpr ValueType PARSER_VALUE_TYPE[] = {TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE};
+    static constexpr ValueType DOT_PARSER_VALUE_TYPE[] = {TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE};
+    static constexpr ValueType WIPE_PARSER_VALUE_TYPE[] = {TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE};
     static constexpr char SENSOR_BM_LOG_ENABLE[] = "sensorBmLogEnable";
 
   private:
     u_int32_t _sensorBmLogEnable = 0;
-    OrderedSeparatorLineParser _parser;
-    char _payload_buffer[2048];
+    OrderedSeparatorLineParser _DOTparser;
+    OrderedSeparatorLineParser _WIPEparser;
+    char _DOTpayload_buffer[2048];
+    char _WIPEpayload_buffer[2048];
+    char _SNpayload_buffer[2048];
 };

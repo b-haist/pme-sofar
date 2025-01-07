@@ -2,6 +2,7 @@
 #include "aanderaaSensor.h"
 #include "app_config.h"
 #include "app_util.h"
+#include "borealisSensor.h"
 #include "bridgeLog.h"
 #include "bridgePowerController.h"
 #include "device_info.h"
@@ -109,6 +110,7 @@ void sensorControllerInit(BridgePowerController *power_controller) {
                     _ctx.seapoint_turbidity_reading_period_ms);
     save = true;
   }
+
   if (save) {
     save_config(BM_CFG_PARTITION_SYSTEM, false);
   }
@@ -286,6 +288,14 @@ static bool node_info_reply_cb(bool ack, uint32_t msg_id, size_t service_strlen,
               reply.node_id, seapoint_turbidity_agg_period_ms, AVERAGER_MAX_SAMPLES);
           if (seapoint_turbidity_sub) {
             abstractSensorAddSensorSub(seapoint_turbidity_sub);
+          }
+        }
+      } else if (strncmp(reply.app_name, "borealis",
+                         MIN(reply.app_name_strlen, strlen("borealis"))) == 0) {
+        if (!sensorControllerFindSensorById(reply.node_id)) {
+          Borealis_t *borealis_sub = createBorealisSensorSub(reply.node_id);
+          if (borealis_sub) {
+            abstractSensorAddSensorSub(borealis_sub);
           }
         }
       }

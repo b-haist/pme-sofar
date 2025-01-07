@@ -71,12 +71,8 @@ static int createPmeWipeDataTopic(void) {    //Wipe
 }
 
 void setup(void) {
-  /* USER ONE-TIME SETUP CODE GOES HERE */
-  // Retrieve user-set config values out of NVM.
-  //hardwareConfigurationPartition->getConfig("plUartBaudRate", strlen("plUartBaudRate"), lastWipeTime);
-  //userConfigurationPartition->getConfig("plUartLineTerm", strlen("plUartLineTerm"), line_term_config);
-  
   //Perform pme sensor setup which includes PLUART setup (P.F.)
+  configASSERT(systemConfigurationPartition);
   pme_sensor.init();
   pme_do_topic_str_len = createPmeDoMeasurementDataTopic();
   pme_wipe_topic_str_len = createPmeWipeDataTopic();
@@ -90,20 +86,6 @@ void setup(void) {
   IOWrite(&LED_BLUE, 0);
   IOWrite(&LED_GREEN, 0);
   IOWrite(&LED_RED, 0);
-  // Write code to request sensor S/N and save to config 
-  /*trigger Initial DO measurement*/
-  // static PmeDissolvedOxygenMsg::Data d;
-  // if (pme_sensor.getDoData(d)) {
-  //   static uint8_t cbor_buf[PME_SENSOR_DATA_MSG_MAX_SIZE];
-  //   size_t encoded_len = 0;
-  //   if (PmeDissolvedOxygenMsg::encode(d, cbor_buf, sizeof(cbor_buf), &encoded_len) == CborNoError) {
-  //     bm_pub_wl(pme_do_topic, pme_do_topic_str_len, cbor_buf, encoded_len, 0);
-  //   } 
-  //   else {
-  //     printf("Failed to encode DO measurement data message\n");
-  //   }
-  // }
-  /*record RTC at time of measurement as latest DO measurement time*/
 }
 
 

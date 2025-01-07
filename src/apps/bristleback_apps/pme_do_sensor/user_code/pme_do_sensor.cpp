@@ -37,6 +37,31 @@ static constexpr char querySN[] = "SN\r";
  * - Sets a line termination character for the PLUART according to the protocol of the sensor.
  * - Enables the PLUART, effectively turning on the UART.
  */
+
+void _led1blink(IOPinHandle_t* led) {
+    IOWrite(led, 1);
+    vTaskDelay(100);
+    IOWrite(led, 0);
+    vTaskDelay(100);
+}
+
+void _led2blink(IOPinHandle_t* led) {
+    IOWrite(led, 1);
+    vTaskDelay(100);
+    IOWrite(led, 0);
+    vTaskDelay(100);
+    IOWrite(led, 1);
+    vTaskDelay(100);
+    IOWrite(led, 0);
+    vTaskDelay(100);
+}
+
+void _ledsalloff() {
+    IOWrite(&LED_BLUE, 0);
+    IOWrite(&LED_GREEN, 0);
+    IOWrite(&LED_RED, 0);
+}
+
 void PmeSensor::init() {
   configASSERT(systemConfigurationPartition);
   _WIPEparser.init();
@@ -82,10 +107,11 @@ void PmeSensor::init() {
  */
 bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
   bool success = false;
-  vTaskDelay(250);
   PLUART::write((uint8_t *)queryMDOT, strlen(queryMDOT));
+  _led1blink(&LED_BLUE);
   vTaskDelay(3000);
   if (PLUART::lineAvailable()) {
+    _led1blink(&LED_GREEN);
     uint16_t do_read_len = PLUART::readLine(_DOTpayload_buffer, sizeof(_DOTpayload_buffer));
     //printf("### DOT Read line: %s\n", _DOTpayload_buffer);
     RTCTimeAndDate_t time_and_date = {};
@@ -123,11 +149,16 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
       }
     } 
     else {
-      printf("Failed to parse DOT data\n");
+      printf("Failed to parse DOT data\n" );
+      _led1blink(&LED_RED);
     }
   }
+  else {
+    printf("No line available from PLUART\n");
+    _led1blink(&LED_RED);
+  }
   return success;
-
+  _ledsalloff();
 }
 
 /**
@@ -144,12 +175,11 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
  */
 bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
     bool success = false;
-    vTaskDelay(250);
     PLUART::write((uint8_t *)queryWIPE, strlen(queryWIPE));
-    // printf("### Wipe query sent\n");
-    vTaskDelay(8000); // Increase delay to ensure enough time between writing and reading
-    // printf("### Wipe delay complete\n");
+    _led2blink(&LED_BLUE);
+    vTaskDelay(5000); // Increase delay to ensure enough time between writing and reading
     if (PLUART::lineAvailable()) {
+        _led2blink(&LED_GREEN);
         uint16_t wipe_read_len = PLUART::readLine(_WIPEpayload_buffer, sizeof(_WIPEpayload_buffer));
         printf("### WIPE Read line: %s\n", _WIPEpayload_buffer);
         RTCTimeAndDate_t time_and_date = {};
@@ -196,9 +226,10 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
         }
     } else {
         printf("No line available from PLUART\n");
+        _led2blink(&LED_RED);
     }
-
     return success;
+    _ledsalloff();
 }
 
 /**

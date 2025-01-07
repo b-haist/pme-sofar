@@ -22,8 +22,32 @@ static constexpr char queryWIPE[] = "WDOT\r";
 //Function to request a serial number of the microdot (B.H.)
 static constexpr char querySN[] = "SN\r";
 
+void _ledBlinkOnce(IOPinHandle_t* led) {
+    IOWrite(led, 1);
+    vTaskDelay(100);
+    IOWrite(led, 0);
+    vTaskDelay(100);
+}
+
+void _ledBlinkTwice(IOPinHandle_t* led) {
+    IOWrite(led, 1);
+    vTaskDelay(100);
+    IOWrite(led, 0);
+    vTaskDelay(100);
+    IOWrite(led, 1);
+    vTaskDelay(100);
+    IOWrite(led, 0);
+    vTaskDelay(100);
+}
+
+void _ledsAllOff() {
+    IOWrite(&LED_BLUE, 0);
+    IOWrite(&LED_GREEN, 0);
+    IOWrite(&LED_RED, 0);
+}
+
 /**
- * @brief Initializes the Seapoint Turbidity Sensor.
+ * @brief Initializes the PME DOT Sensor and wiper
  *
  * This function performs several operations to prepare the sensor for use:
  * - Asserts that the system configuration partition is available.
@@ -37,36 +61,11 @@ static constexpr char querySN[] = "SN\r";
  * - Sets a line termination character for the PLUART according to the protocol of the sensor.
  * - Enables the PLUART, effectively turning on the UART.
  */
-
-void _led1blink(IOPinHandle_t* led) {
-    IOWrite(led, 1);
-    vTaskDelay(100);
-    IOWrite(led, 0);
-    vTaskDelay(100);
-}
-
-void _led2blink(IOPinHandle_t* led) {
-    IOWrite(led, 1);
-    vTaskDelay(100);
-    IOWrite(led, 0);
-    vTaskDelay(100);
-    IOWrite(led, 1);
-    vTaskDelay(100);
-    IOWrite(led, 0);
-    vTaskDelay(100);
-}
-
-void _ledsalloff() {
-    IOWrite(&LED_BLUE, 0);
-    IOWrite(&LED_GREEN, 0);
-    IOWrite(&LED_RED, 0);
-}
-
 void PmeSensor::init() {
   configASSERT(systemConfigurationPartition);
-  _WIPEparser.init();
   _DOTparser.init();
-  vTaskDelay(10000);
+  _WIPEparser.init();
+  vTaskDelay(10000); //boot delay to allow for user to connect for viewing
   systemConfigurationPartition->getConfig(SENSOR_BM_LOG_ENABLE, strlen(SENSOR_BM_LOG_ENABLE),
                                           _sensorBmLogEnable);
   printf("sensorBmLogEnable: %" PRIu32 "\n", _sensorBmLogEnable);
@@ -108,11 +107,11 @@ void PmeSensor::init() {
 bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
   bool success = false;
   PLUART::write((uint8_t *)queryMDOT, strlen(queryMDOT));
-  _led1blink(&LED_BLUE);
-  vTaskDelay(3000);
+  _ledBlinkOnce(&LED_BLUE);
+  vTaskDelay(2800); //2800 to account for the 200ms delay in the LED blink function
   if (PLUART::lineAvailable()) {
-    _led1blink(&LED_GREEN);
     uint16_t do_read_len = PLUART::readLine(_DOTpayload_buffer, sizeof(_DOTpayload_buffer));
+    _ledBlinkOnce(&LED_GREEN);
     //printf("### DOT Read line: %s\n", _DOTpayload_buffer);
     RTCTimeAndDate_t time_and_date = {};
     rtcGet(&time_and_date);
@@ -142,7 +141,7 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
         d.temperature_deg_c = temp_signal.data.double_val;
         d.do_mg_per_l = do_signal.data.double_val;
         d.quality = q_signal.data.double_val;
-        printf("### Epoch time: %llu, Uptime: %llu  |  temp: %.3f, DO: %.3f, Q: %.3f\n", d.header.reading_time_utc_ms, d.header.reading_uptime_millis, d.temperature_deg_c, d.do_mg_per_l, d.quality);
+        printf("### DOT Parse Success  >>  Epoch time: %llu, Uptime: %llu  |  temp: %.3f, DO: %.3f, Q: %.3f\n", d.header.reading_time_utc_ms, d.header.reading_uptime_millis, d.temperature_deg_c, d.do_mg_per_l, d.quality);
         // DO Sat% not available at this time; setting to NULL causes error (converting NULL to double)
         //d.do_saturation_pct = 0;
         success = true;
@@ -150,15 +149,15 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
     } 
     else {
       printf("Failed to parse DOT data\n" );
-      _led1blink(&LED_RED);
+      _ledBlinkOnce(&LED_RED);
     }
   }
   else {
-    printf("No line available from PLUART\n");
-    _led1blink(&LED_RED);
+    printf("No DOT line available from PLUART\n");
+    _ledBlinkOnce(&LED_RED);
   }
   return success;
-  _ledsalloff();
+  _ledsAllOff();
 }
 
 /**
@@ -176,11 +175,11 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
 bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
     bool success = false;
     PLUART::write((uint8_t *)queryWIPE, strlen(queryWIPE));
-    _led2blink(&LED_BLUE);
-    vTaskDelay(5000); // Increase delay to ensure enough time between writing and reading
+    _ledBlinkTwice(&LED_BLUE);
+    vTaskDelay(4600); // 5s delay to ensure enough time between writing and reading, minus 400ms blink times
     if (PLUART::lineAvailable()) {
-        _led2blink(&LED_GREEN);
         uint16_t wipe_read_len = PLUART::readLine(_WIPEpayload_buffer, sizeof(_WIPEpayload_buffer));
+        _ledBlinkTwice(&LED_GREEN);
         printf("### WIPE Read line: %s\n", _WIPEpayload_buffer);
         RTCTimeAndDate_t time_and_date = {};
         rtcGet(&time_and_date);
@@ -217,7 +216,7 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
                 w.start2_mA = start2_mA.data.double_val;
                 w.avg2_mA = avg2_mA.data.double_val;
                 w.rsource = rsource.data.double_val;
-                printf("### Epoch time: %llu, Uptime: %llu  |  Wipe time: %.3f, Start1: %.3f, Avg1: %.3f, Start2: %.3f, Avg2: %.3f, Rsource: %.3f\n",
+                printf("###  WIPE Parse Success  >>  Epoch time: %llu, Uptime: %llu  |  Wipe time: %.3f, Start1: %.3f, Avg1: %.3f, Start2: %.3f, Avg2: %.3f, Rsource: %.3f\n",
                        w.header.reading_time_utc_ms, w.header.reading_uptime_millis, w.wipe_time_sec, w.start1_mA, w.avg1_mA, w.start2_mA, w.avg2_mA, w.rsource);
                 success = true;
             }
@@ -225,11 +224,11 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
             printf("Failed to parse WIPE data\n");
         }
     } else {
-        printf("No line available from PLUART\n");
-        _led2blink(&LED_RED);
+        printf("No wipe line available from PLUART\n");
+        _ledBlinkTwice(&LED_RED);
     }
     return success;
-    _ledsalloff();
+    _ledsAllOff();
 }
 
 /**

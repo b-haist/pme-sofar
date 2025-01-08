@@ -46,6 +46,7 @@ void _ledsAllOff() {
     IOWrite(&LED_RED, 0);
 }
 
+
 /**
  * @brief Initializes the PME DOT Sensor and wiper
  *
@@ -106,6 +107,12 @@ void PmeSensor::init() {
  */
 bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
   bool success = false;
+  RTCTimeAndDate_t time_and_date = {};
+  rtcGet(&time_and_date);
+  char rtc_time_str[32] = {};
+  rtcPrint(rtc_time_str, NULL);
+  d.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000;
+  printf("### DO Epoch time: %llu\n", d.header.reading_time_utc_ms);
   PLUART::write((uint8_t *)queryMDOT, strlen(queryMDOT));
   _ledBlinkOnce(&LED_BLUE);
   vTaskDelay(2800); //2800 to account for the 200ms delay in the LED blink function
@@ -113,11 +120,6 @@ bool PmeSensor::getDoData(PmeDissolvedOxygenMsg::Data &d) {
     uint16_t do_read_len = PLUART::readLine(_DOTpayload_buffer, sizeof(_DOTpayload_buffer));
     _ledBlinkOnce(&LED_GREEN);
     //printf("### DOT Read line: %s\n", _DOTpayload_buffer);
-    RTCTimeAndDate_t time_and_date = {};
-    rtcGet(&time_and_date);
-    char rtc_time_str[32] = {};
-    rtcPrint(rtc_time_str, NULL);
-
     if (_sensorBmLogEnable) {
       bm_fprintf(0, PME_DO_RAW_LOG, USE_TIMESTAMP, "tick: %" PRIu64 ", rtc: %s, line: %.*s\n",
                  uptimeGetMs(), rtc_time_str, do_read_len, _DOTpayload_buffer);

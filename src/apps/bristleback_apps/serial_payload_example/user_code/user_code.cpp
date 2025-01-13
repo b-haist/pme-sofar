@@ -1,16 +1,15 @@
 #include "user_code.h"
-#include "bm_network.h"
-#include "bm_printf.h"
-#include "bm_pubsub.h"
+#include "app_util.h"
 #include "bsp.h"
 #include "debug.h"
 #include "lwip/inet.h"
 #include "payload_uart.h"
+#include "pubsub.h"
+#include "spotter.h"
 #include "stm32_rtc.h"
 #include "task_priorities.h"
 #include "uptime.h"
 #include "usart.h"
-#include "util.h"
 
 #define LED_ON_TIME_MS 75
 #define LED_PERIOD_MS 5000
@@ -25,10 +24,6 @@
 // How long should our sample buffer arrays be?
 // Assume we have a 2s polling period.
 #define MAX_SENSOR_SAMPLES (((uint64_t)SENSOR_AGG_PERIOD_MS / 10000))
-
-// app_main passes a handle to the config partitions in NVM.
-extern cfg::Configuration *userConfigurationPartition;
-extern cfg::Configuration *systemConfigurationPartition;
 
 // variables to store configurations retrieved from NVM
 static u_int32_t baud_rate_config = DEFAULT_BAUD_RATE;
@@ -49,13 +44,12 @@ char payload_buffer[2048];
 void setup(void) {
   /* USER ONE-TIME SETUP CODE GOES HERE */
   // Retrieve user-set config values out of NVM.
-  userConfigurationPartition->getConfig("plUartBaudRate", strlen("plUartBaudRate"), baud_rate_config);
-  userConfigurationPartition->getConfig("plUartLineTerm", strlen("plUartLineTerm"), line_term_config);
-  systemConfigurationPartition->getConfig("sensorBmLogEnable", strlen("sensorBmLogEnable"), bm_log_enable);
-  // initBuffer will allocate memory for stats data buffers.
-  temp_stats.initBuffer(MAX_SENSOR_SAMPLES);
-  doxygen_stats.initBuffer(MAX_SENSOR_SAMPLES);
-  q_stats.initBuffer(MAX_SENSOR_SAMPLES);
+  get_config_uint(BM_CFG_PARTITION_USER, "plUartBaudRate", strlen("plUartBaudRate"),
+                  &baud_rate_config);
+  get_config_uint(BM_CFG_PARTITION_USER, "plUartLineTerm", strlen("plUartLineTerm"),
+                  &line_term_config);
+  get_config_uint(BM_CFG_PARTITION_SYSTEM, "sensorBmLogEnable", strlen("sensorBmLogEnable"),
+                  &bm_log_enable);
 
   // Setup the UART – the on-board serial driver that talks to the RS232 transceiver.
   PLUART::init(USER_TASK_PRIORITY);
@@ -141,13 +135,15 @@ void loop(void) {
     char rtcTimeBuffer[32];
     rtcPrint(rtcTimeBuffer, &time_and_date);
 
-    // Based on configuration, print the payload data to a file, to the bm_printf console, and to the printf console.
+    // Based on configuration, print the payload data to a file, to the spotter_log_console console, and to the printf console.
     if (bm_log_enable) {
-      bm_fprintf(0, "payload_data.log", USE_TIMESTAMP, "tick: %llu, rtc: %s, line: %.*s\n",
+      spotter_log(0, "payload_data.log", USE_TIMESTAMP, "tick: %llu, rtc: %s, line: %.*s\n",
                  uptimeGetMs(), rtcTimeBuffer, read_len, payload_buffer);
-      bm_printf(0, "[payload] | tick: %llu, rtc: %s, line: %.*s", uptimeGetMs(), rtcTimeBuffer, read_len, payload_buffer);
+      spotter_log_console(0, "[payload] | tick: %llu, rtc: %s, line: %.*s", uptimeGetMs(), rtcTimeBuffer,
+                read_len, payload_buffer);
     }
-      printf("[payload-line] | tick: %llu, rtc: %s, line: %.*s\n", uptimeGetMs(), rtcTimeBuffer, read_len, payload_buffer);
+    printf("[payload-line] | tick: %llu, rtc: %s, line: %.*s\n", uptimeGetMs(), rtcTimeBuffer,
+           read_len, payload_buffer);
 
     ledLinePulse = uptimeGetMs(); // trigger a pulse on LED
   }

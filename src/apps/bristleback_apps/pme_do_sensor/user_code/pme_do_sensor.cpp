@@ -16,8 +16,12 @@
 #include <cstring>
 
 #define LAST_WIPE_EPOCH_KEY "lastWipeEpochS"
+//#define DOT_INTERVAL_KEY "DOTinterval"
+//#define WIPE_INTERVAL_KEY "WipeInterval"
 
 uint32_t lastWipeEpochS = 0;
+//uint32_t DOTinterval = 600;
+//uint32_t WipeInterval = 14400;
 
 //Function to request a DO measurement from the microDOT sensor. (P.F.)
 static constexpr char queryMDOT[] = "MDOT\r";
@@ -75,6 +79,26 @@ uint32_t loadLastWipeEpoch() {
   }
   return lastWipeEpochS;
 }
+
+/*
+uint32_t loadDOTinterval () {
+  bool success = get_config_uint(BM_CFG_PARTITION_USER, DOT_INTERVAL_KEY,
+                                  strlen(DOT_INTERVAL_KEY), &DOTinterval);
+  if (!success) {
+    printf("DOT_INTERVAL_KEY not found. Initializing to 600s (10min).\n");
+  }
+  return DOTinterval;
+}
+
+uint32_t loadWipeInterval () {
+  bool success = get_config_uint(BM_CFG_PARTITION_USER, WIPE_INTERVAL_KEY,
+                                strlen(WIPE_INTERVAL_KEY), &Wipenterval);
+  if (!success) {
+    printf("WIPE_INTERVAL_KEY not found. Initializing to 14400s (4hrs).\n");
+  }
+  return WipeInterval;
+}
+*/
 
 /**
  * @brief Initializes the PME DOT Sensor and wiper
@@ -258,11 +282,11 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
       Value start1_mA = _WIPEparser.getValue(1);
       Value avg1_mA = _WIPEparser.getValue(2);
       Value start2_mA = _WIPEparser.getValue(3);
-      Value avg2_mA = _WIPEparser.getValue(4);
+      Value final_mA = _WIPEparser.getValue(4);
       Value rsource = _WIPEparser.getValue(5);
       if (wipe_time.type != TYPE_DOUBLE || start1_mA.type != TYPE_DOUBLE ||
           avg1_mA.type != TYPE_DOUBLE || start2_mA.type != TYPE_DOUBLE ||
-          avg2_mA.type != TYPE_DOUBLE || rsource.type != TYPE_DOUBLE) {
+          final_mA.type != TYPE_DOUBLE || rsource.type != TYPE_DOUBLE) {
         printf("!  Parsed invalid WIPE data\n");
       } else {
         w.header.reading_time_utc_ms = rtcGetMicroSeconds(&time_and_date) / 1000000;
@@ -271,12 +295,12 @@ bool PmeSensor::getWipeData(PmeWipeMsg::Data &w) {
         w.start1_mA = start1_mA.data.double_val;
         w.avg1_mA = avg1_mA.data.double_val;
         w.start2_mA = start2_mA.data.double_val;
-        w.avg2_mA = avg2_mA.data.double_val;
+        w.final_mA = final_mA.data.double_val;
         w.rsource = rsource.data.double_val;
         printf("#  Wipe Parse Success  >>  Epoch time: %llu, Uptime: %llu  |  Wipe time: "
                "%.1f, Start1: %.1f, Avg1: %.1f, Start2: %.1f, Avg2: %.1f, Rsource: %.1f\n",
                w.header.reading_time_utc_ms, w.header.reading_uptime_millis, w.wipe_time_sec,
-               w.start1_mA, w.avg1_mA, w.start2_mA, w.avg2_mA, w.rsource);
+               w.start1_mA, w.avg1_mA, w.start2_mA, w.final_mA, w.rsource);
         success = true;
       }
     } else {

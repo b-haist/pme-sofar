@@ -60,8 +60,8 @@ static constexpr uint32_t pmeSensorDataMsgMaxSize = 256;
 // Variables for measurements and timing
 static uint32_t lastWipeEpochS = 0;
 static uint64_t lastDoMeasurementUptimeSec = 0;
-static uint32_t doIntervalSec = 600;
-static uint32_t wipeIntervalSec = 14400;
+static uint32_t doIntervalSec = 60;
+static uint32_t wipeIntervalSec = 60;
 
 // Function to create the topic string for pme DO measurement data
 static int createPmeDoMeasurementDataTopic(void) { // DO measurement

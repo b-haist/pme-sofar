@@ -8,6 +8,8 @@ void saveLastWipeEpoch(uint32_t epochTimeSec);
 uint32_t loadLastWipeEpoch();
 void ledAllOff();
 
+extern uint32_t pmeLogEnable;
+
 class PmeSensor {
   public:
     PmeSensor()
@@ -23,15 +25,15 @@ class PmeSensor {
     static constexpr char PME_DO_RAW_LOG[] = "pme_do_raw.log";
     static constexpr char PME_WIPE_RAW_LOG[] = "pme_wipe_raw.log";
 
+
   private:
     static constexpr uint32_t BAUD_RATE = 9600;
     static constexpr char LINE_TERM = '\r';
     static constexpr ValueType DOT_PARSER_VALUE_TYPE[] = {TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE};
     static constexpr ValueType WIPE_PARSER_VALUE_TYPE[] = {TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE};
-    static constexpr char SENSOR_BM_LOG_ENABLE[] = "sensorBmLogEnable";
+
 
   private:
-    uint32_t _sensorBmLogEnable = 0;
     OrderedSeparatorLineParser _DOTparser;
     OrderedSeparatorLineParser _WIPEparser;
     char _DOTpayload_buffer[2048];

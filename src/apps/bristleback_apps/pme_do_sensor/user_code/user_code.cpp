@@ -34,7 +34,6 @@
 
 /* TODO
 - Add power switching to microDOT when sensing is not ready
-- User/System config to allow customer to set measurement intervals and toggle spotter_log for uploading data
 - Use cbor buffers to upload data rather than raw payloads (cbor works but not implemented yet)
 - Comment code
 - Remove or comment out debugging printf's
@@ -43,6 +42,10 @@
 */
 
 
+
+uint32_t pmeLogEnable = 1;
+uint32_t pmeDOTInterval = 600;
+uint32_t pmeWipeInterval = 14400;
 
 static PmeSensor pmeSensor;
 
@@ -56,12 +59,15 @@ bool firstDo;
 
 // Defines the max buffer size for the pme sensor message
 static constexpr uint32_t pmeSensorDataMsgMaxSize = 256;
+static constexpr char SENSOR_BM_LOG_ENABLE[] = "pmeLogEnable";
+static constexpr char SENSOR_BM_DOT_INTERVAL[] = "pmeDOTInterval";
+static constexpr char SENSOR_BM_WIPE_INTERVAL[] = "pmeWipeInterval";
+
+
 
 // Variables for measurements and timing
 static uint32_t lastWipeEpochS = 0;
 static uint64_t lastDoMeasurementUptimeSec = 0;
-static uint32_t doIntervalSec = 600;
-static uint32_t wipeIntervalSec = 14400;
 
 // Function to create the topic string for pme DO measurement data
 static int createPmeDoMeasurementDataTopic(void) { // DO measurement
@@ -81,6 +87,14 @@ static int createPmeWipeDataTopic(void) { // Wipe
 void debugTx(void) {}
 
 void setup(void) {
+  // Load system configuration & initialize if not configured by user
+  get_config_uint(BM_CFG_PARTITION_SYSTEM, SENSOR_BM_LOG_ENABLE, strlen(SENSOR_BM_LOG_ENABLE), &pmeLogEnable);
+  get_config_uint(BM_CFG_PARTITION_SYSTEM, SENSOR_BM_DOT_INTERVAL, strlen(SENSOR_BM_DOT_INTERVAL), &pmeDOTInterval);
+  get_config_uint(BM_CFG_PARTITION_SYSTEM, SENSOR_BM_WIPE_INTERVAL, strlen(SENSOR_BM_WIPE_INTERVAL), &pmeWipeInterval);
+  printf("pmeLogEnable: %" PRIu32 "\n", pmeLogEnable);
+  printf("pmeDOTInterval: %" PRIu32 "\n", pmeDOTInterval);
+  printf("pmeWipeInterval: %" PRIu32 "\n", pmeWipeInterval);
+
   pmeSensor.init();
   pmeDoTopicStrLen = createPmeDoMeasurementDataTopic();
   pmeWipeTopicStrLen = createPmeWipeDataTopic();
@@ -95,6 +109,7 @@ void setup(void) {
   firstDo = true;
 }
 
+
 void loop(void) {
   RTCTimeAndDate_t time_and_date = {};
   bool rtcIsSet = rtcGet(&time_and_date);
@@ -105,10 +120,50 @@ void loop(void) {
   // Debugging timers
   // printf("currentUptimeSec: %llu\n",currentUptimeSec);
   // printf("currentUptimeMs: %" PRIu64 ", uptimeGetMs: %" PRIu64 ", remainingWipeTime: %" PRIu64 ", remainingDoTime: %" PRIu64 "\n", currentUptimeMs, uptimeGetMs(), remainingWipeTime, remainingDoTime);
-  // Perform a DO measurement
+
+
+  //////////
+  // Wipe //
+  //////////
+
+  if (rtcIsSet) {
+    // Check if enough time has passed since the last wipe
+    uint64_t elapsedWipe = epochTimeSec - lastWipeEpochS;
+    if (elapsedWipe >= pmeWipeInterval) {
+      // Perform a Wipe
+      static PmeWipeMsg::Data w;
+      if (pmeSensor.getWipeData(w)) {
+        saveLastWipeEpoch(epochTimeSec);
+        lastWipeEpochS = epochTimeSec;
+        static uint8_t cborBuf[pmeSensorDataMsgMaxSize];
+        size_t encodedLen = 0;
+        if (true) {
+          debugTx();
+        }
+        if (PmeWipeMsg::encode(w, cborBuf, sizeof(cborBuf), &encodedLen) == CborNoError) {
+          bm_pub_wl(pmeDoTopic, pmeDoTopicStrLen, cborBuf, encodedLen, 0,
+                    BM_COMMON_PUB_SUB_VERSION);
+          printf("#  WIPE Encoding success! | Topic: %s, cborBuf: %d, \n", pmeDoTopic,
+                 cborBuf); // Debugging
+          //optional with config, todo
+        } else {
+          printf("!  Failed to encode WIPE data message\n");
+        }
+      }
+    } else {
+      printf("Wipe timer: %llu of %i seconds\n", elapsedWipe,
+             pmeWipeInterval);
+    }
+  } else {
+    printf("!  Not wiping; RTC is not set!\n");
+  }
+
+/////////
+// DOT //
+/////////
   static PmeDissolvedOxygenMsg::Data d;
   uint64_t elapsedDoSec = currentUptimeSec - lastDoMeasurementUptimeSec;
-  if (elapsedDoSec >= doIntervalSec || firstDo) {
+  if (elapsedDoSec >= pmeDOTInterval || firstDo) {
     
     if (firstDo) {
       firstDo = false; //Turn off initial DO flag
@@ -135,46 +190,7 @@ void loop(void) {
     }
     lastDoMeasurementUptimeSec = currentUptimeSec;
   } else {
-    printf("DOT timer: %llu of %i seconds\n", elapsedDoSec, doIntervalSec);
-  }
-
-  ////////
-  // Wipe
-  ////////
-
-  //debugging epoch timers
-  // printf("&&&& lastwipetime %lu, epochtimesec %llu, wipeintervalsec %lu\n", lastWipeEpochS, epochTimeSec, wipeIntervalSec);
-
-  if (rtcIsSet) {
-    // Check if enough time has passed since the last wipe
-    uint64_t elapsedWipe = epochTimeSec - lastWipeEpochS;
-    if (elapsedWipe >= wipeIntervalSec) {
-      // Perform a Wipe
-      static PmeWipeMsg::Data w;
-      saveLastWipeEpoch(epochTimeSec);
-      lastWipeEpochS = epochTimeSec;
-      if (pmeSensor.getWipeData(w)) {
-        static uint8_t cborBuf[pmeSensorDataMsgMaxSize];
-        size_t encodedLen = 0;
-        if (true) {
-          debugTx();
-        }
-        if (PmeWipeMsg::encode(w, cborBuf, sizeof(cborBuf), &encodedLen) == CborNoError) {
-          bm_pub_wl(pmeDoTopic, pmeDoTopicStrLen, cborBuf, encodedLen, 0,
-                    BM_COMMON_PUB_SUB_VERSION);
-          printf("#  WIPE Encoding success! | Topic: %s, cborBuf: %d, \n", pmeDoTopic,
-                 cborBuf); // Debugging
-          //optional with config, todo
-        } else {
-          printf("!  Failed to encode WIPE data message\n");
-        }
-      }
-    } else {
-      printf("Wipe timer: %llu of %i seconds\n", elapsedWipe,
-             wipeIntervalSec);
-    }
-  } else {
-    printf("!  Not wiping; RTC is not set!\n");
+    printf("DOT timer: %llu of %i seconds\n", elapsedDoSec, pmeDOTInterval);
   }
   bm_delay(1000);
 }
